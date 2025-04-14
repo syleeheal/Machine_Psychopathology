@@ -7,6 +7,8 @@ This is the code repository of the paper ["Emergence of psychopathological compu
 4. [_code_]: causal inference
 5. [_data_]: unit activation dataset
 6. [_model_]: trained S3AE parameters
+
+We will update this repository with the follow-up studies' codes.
    
 ---
 
