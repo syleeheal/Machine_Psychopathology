@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import gc
-
+from huggingface_hub import hf_hub_download
 
 class S3AE(nn.Module):
     def __init__(self, input_dim, hidden_dim, label_dim):
@@ -47,3 +47,19 @@ def infer_sae(sae, dataloader_test):
     return X, X_hat, Z, Y, Y_hat
 
 
+def load_trained_s3ae(local_path="./model"):
+
+    # download the model from Huggingface
+    hf_hub_download(repo_id="syleetolow/s3ae", filename="trained_s3ae.pt", repo_type="model", local_dir=local_path)
+
+    # Load S3AE model
+    path_s3ae = local_path + '/trained_s3ae.pt'
+    state_dict = torch.load(path_s3ae, weights_only=True)
+    sae = S3AE(
+        input_dim=state_dict['encoder.weight'].shape[1],
+        hidden_dim=state_dict['encoder.weight'].shape[0],
+        label_dim=17,
+    ).to(torch.bfloat16)
+    sae.load_state_dict(state_dict)
+    
+    return sae
