@@ -53,7 +53,7 @@ Dimensions 7, 13, and 14 were not used for the paper's analysis.
 We provide the code to run Q&A sessions to reproduce **Figure 3: Claim 2 Result**.
  - [qna_session.ipynb]: Q&A session code (See Appendix C). 
  - Data & Model: Running the code automatically downloads LLM and the trained S3AE from Huggingface.
- - Time: With (8 x NVIDIA RTX A6000) GPU, it takes about 20 hours to run a single Q&A sample (i.e., 100 timesteps of Q&As, of 22 questions, for 15 different intervention types)
+ - Time: With eight NVIDIA RTX A6000 GPUs, it takes about 20 hours to run a single Q&A sample (i.e., 100 timesteps of Q&As, of 22 questions, for 15 different intervention types)
  - Output: Running the code will save the Q&A result at ./data/qna_output.csv
 
 ---
