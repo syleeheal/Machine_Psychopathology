@@ -64,6 +64,16 @@ We provide the code to run causal inference.
 
 ---
 
+## Software
+
+ - OS: Ubuntu 22.04.3 LTS
+ - Python version: 3.10.13
+ - Cuda version: 11.4 (NVIDIA RTX A6000)
+ - Python packages required to run the code are in requirements.txt
+
+---
+
+
 ## Contact
 For any questions, please email me at syleetolow@kaist.ac.kr! 
 
