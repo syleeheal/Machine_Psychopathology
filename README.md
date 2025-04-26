@@ -1,5 +1,4 @@
 # Machine_Psychopathology
-
 This is the code repository of the paper ["Emergence of psychopathological computations in large language models"](https://arxiv.org/abs/2504.08016), containing the following:
 1. [_code_]: input prompt designs for the synthetic data generation
 2. [_code_]: S3AE training and evaluation
@@ -8,12 +7,18 @@ This is the code repository of the paper ["Emergence of psychopathological compu
 5. [_data_]: unit activation dataset
 6. [_model_]: trained S3AE parameters
 
-We will update this repository with the follow-up studies' codes.
+We will update this repository with the codes for the follow-up studies.
    
 ---
 
+## Synthetic data generation
+ - [data_generation_prompt.py]: input prompt designs to generate synthetic data used to train and evaluate S3AE (See Appendix A).
+ - [./data/qna_output.zip]: dataset of unit activations used for activation dynamics and causal analysis (_needs to be unzipped_); actual texts that LLM generated were removed due to ethical and safety concerns.
+
+---
+
 ## S3AE
-We provide codes related to **S**entence-level, **S**upervised, **S**parse **A**uto**E**ncoder (S3AE).
+We provide codes related to **S**entence-level, **S**upervised, **S**parse **A**uto**E**ncoder (S3AE; See Section 3 and Appendix B).
 
  - [s3ae.py]: S3AE architecture, load, and inference code 
  - [s3ae_main.py]: S3AE training and evaluation code
@@ -45,35 +50,32 @@ Dimensions 7, 13, and 14 were not used for the paper's analysis.
 ---
 
 ## Q&A
-We provide the code to run Q&A sessions.
- - [qna_session.ipynb]: Q&A session code (See Appendix C). **Figure 3: Claim 2 Result** can be reproduced with this code.
+We provide the code to run Q&A sessions to reproduce **Figure 3: Claim 2 Result**.
+ - [qna_session.ipynb]: Q&A session code (See Appendix C). 
+ - Data & Model: Running the code automatically downloads LLM and the trained S3AE from Huggingface.
+ - Time: With (8 x NVIDIA RTX A6000) GPU, it takes about 20 hours to run a single Q&A sample (i.e., 100 timesteps of Q&As, of 22 questions, for 15 different intervention types)
+ - Output: Running the code will save the Q&A result at ./data/qna_output.csv
 
 ---
 
 ## Causal inference
-
-We provide the code to run causal inference.
- - [causal_inference.ipynb]: causal inference code (See Appendix D). **Figure 4: Claim 3 Result** can be reproduced with this code.
-
----
-
-## Synthetic data generation
-
- - [data_generation_prompt.py]: input prompt designs to generate synthetic data used to train and evaluate S3AE.
- - [./data/qna_output.zip]: dataset of unit activations used for activation dynamics and causal analysis (_needs to be unzipped_); actual texts that LLM generated were removed due to ethical and safety concerns.
+We provide the code to run causal inference to reproduce **Figure 4: Claim 3 Result**.
+ - [causal_inference.ipynb]: causal inference code (See Appendix D). 
+ - Data & Model: Running the code requires Q&A data obtained from qna_session.ipynb. The data used in the study can be obtained by unzipping ./data/qna_output.zip.
+ - Time: It takes about 2-4 days to run the causal structure inference, depending on the used CPU device. Other analyses take less than 10 minutes.
+ - Output: Running the code will return all results reported in Figure 4.
 
 ---
 
 ## Software
-
  - OS: Ubuntu 22.04.3 LTS
- - Python version: 3.10.13
- - Cuda version: 11.4 (NVIDIA RTX A6000)
- - Python packages required to run the code are in requirements.txt
+ - Python: 3.10.13
+ - Cuda: 11.4 (NVIDIA RTX A6000)
+ - Python packages required to run the code are in requirements.txt. To install them, run 'pip install -r requirements.txt'. 
+ - Installation time: Downloading all requisite data and models typically would consume up to 2 hours.
+ - Since some of the core packages for the analysis heavily depend on each other, we recommend using a virtual conda environment.
 
 ---
 
-
 ## Contact
 For any questions, please email me at syleetolow@kaist.ac.kr! 
-
