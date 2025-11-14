@@ -16,7 +16,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from openai import OpenAI
 from google import genai
 
-from B_sae.sae import S3AE
+from sae.sae import S3AE
 
 
 class Config:
