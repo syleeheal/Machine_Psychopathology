@@ -149,7 +149,7 @@ def eval_sae_direction(thought, sae, label_dict):
     plt.title('Cosine Similarity of Feature Directions')
     plt.show()
 
-def eval_sae_activation_corr(cfg, df, measure_manager, symp_keys, label_dict, sev_dict, layers):
+def eval_sae_activation_corr(cfg, df, measure_manager, symp_keys, label_dict, layers):
 
     df['sev_pred'] = np.nan
     dfs = []
