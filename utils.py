@@ -18,6 +18,9 @@ from google import genai
 
 from sae.sae import S3AE
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 
 class Config:
     def __init__(self, model_id="Qwen/Qwen3-32B"):
@@ -690,3 +693,33 @@ def data_split(X, y, batch_size, train_size=1):
     return dataloader_train, dataloader_test
 
 
+def set_style():
+    sns.set_context('paper', font_scale=1.2, rc={"lines.linewidth": 2.5})
+    sns.set_style('whitegrid', {'axes.edgecolor': '0.2', 'grid.linestyle': '-'})
+
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Helvetica', 'TeX Gyre Heros', 'Liberation Sans', 'Arial']
+
+    plt.rcParams['mathtext.fontset'] = 'cm'
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
+
+    plt.rc('font', size=14)          # controls default text sizes
+    plt.rc('axes', titlesize=16)     # fontsize of the axes title
+    plt.rc('axes', labelsize=14)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=12)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=12)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=12)    # legend fontsize
+    plt.rc('figure', titlesize=16)  # fontsize of the figure title
+
+    pd.set_option('future.no_silent_downcasting', True)
+    
+
+    c_darkorange_rgb = np.array([249, 97, 0])/255
+    c_blue_rgb = np.array([60,126,176])/255
+    c_white_rgb = np.array([255, 255, 255])/255
+    c_navy_rgb = np.array([16, 19, 123])/255
+
+    diverging_cmap = LinearSegmentedColormap.from_list('custom_cmap', [c_blue_rgb, c_white_rgb, c_darkorange_rgb])
+    
+    return diverging_cmap, c_darkorange_rgb, c_blue_rgb, c_white_rgb, c_navy_rgb
