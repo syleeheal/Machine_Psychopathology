@@ -1,7 +1,7 @@
 import os
 os.environ['HF_HOME'] = './HF/hf_home'
 os.environ['HF_HUB_CACHE'] = './HF/hub'
-# from huggingface_hub import interpreter_login; interpreter_login() # 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
+# from huggingface_hub import interpreter_login; interpreter_login()
 
 import json
 import pickle
