@@ -1,0 +1,71 @@
+llama 3 1b
+python ./main_train_sae.py --device cuda:0 --hook-layer 2 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.2 &
+python ./main_train_sae.py --device cuda:1 --hook-layer 5 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.001 --grad-norm 0.2 &
+python ./main_train_sae.py --device cuda:2 --hook-layer 8 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:3 --hook-layer 11 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.1  
+
+llama 3 3b
+python ./main_train_sae.py --device cuda:4 --hook-layer 4 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.005 --grad-norm 0.2 &
+python ./main_train_sae.py --device cuda:5 --hook-layer 10 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.001 --grad-norm 0.2 &
+python ./main_train_sae.py --device cuda:4 --hook-layer 15 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.005 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:5 --hook-layer 21 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.005 --grad-norm 0.1  
+
+llama 3 8b
+python ./main_train_sae.py --device cuda:0 --hook-layer 5 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.002 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:1 --hook-layer 11 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.005 --grad-norm 0.2 &
+python ./main_train_sae.py --device cuda:2 --hook-layer 18 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.001 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:3 --hook-layer 24 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.005 --grad-norm 0.05
+
+llama 3 70b
+python ./main_train_sae.py --device cuda:0 --hook-layer 15 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.002 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:1 --hook-layer 31 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.002 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:2 --hook-layer 47 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.005 --grad-norm 0.2 &
+python ./main_train_sae.py --device cuda:3 --hook-layer 63 --tgt-init-recon-loss 10 --tgt-init-cls-loss 5 --lr 0.001 --grad-norm 0.5 
+
+gemma 3 270m
+python ./main_train_sae.py --device cuda:4 --hook-layer 4 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.001 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:5 --hook-layer 7 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.05 &
+python ./main_train_sae.py --device cuda:4 --hook-layer 10 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:5 --hook-layer 13 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5  --lr 0.002 --grad-norm 0.5 
+
+gemma 3 1b
+python ./main_train_sae.py --device cuda:0 --hook-layer 4 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.001 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:1 --hook-layer 9 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.05 &
+python ./main_train_sae.py --device cuda:2 --hook-layer 14 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:3 --hook-layer 19 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5  --lr 0.002 --grad-norm 0.5 
+
+gemma 3 4b
+python ./main_train_sae.py --device cuda:4 --hook-layer 6 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.001 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:5 --hook-layer 12 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.05 &
+python ./main_train_sae.py --device cuda:4 --hook-layer 19 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:5 --hook-layer 26 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5  --lr 0.002 --grad-norm 0.5 
+
+gemma 3 12b
+python ./main_train_sae.py --device cuda:2 --hook-layer 8 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:3 --hook-layer 18 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:2 --hook-layer 27 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:3 --hook-layer 37 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.5 
+
+gemma 3 27b
+python ./main_train_sae.py --device cuda:0 --hook-layer 14 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.001 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:1 --hook-layer 23 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:0 --hook-layer 36 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.001 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:1 --hook-layer 48 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.5  
+
+qwen 3 1.7B and 0.6B [4,10,15,21]
+python ./main_train_sae.py --device cuda:4 --hook-layer 4 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:4 --hook-layer 10 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:5 --hook-layer 15 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:5 --hook-layer 21 --tgt-init-recon-loss 50 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 
+
+qwen 3 14B  [7,15,23,31]
+python ./main_train_sae.py --device cuda:0 --hook-layer 7 --tgt-init-recon-loss 100 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:1 --hook-layer 15 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:2 --hook-layer 23 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:3 --hook-layer 31 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 
+
+qwen 3 32B  [11,24,37,50]
+python ./main_train_sae.py --device cuda:0 --hook-layer 11 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 &
+python ./main_train_sae.py --device cuda:1 --hook-layer 24 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.005 --grad-norm 0.5 &
+python ./main_train_sae.py --device cuda:2 --hook-layer 37 --tgt-init-recon-loss 1 --tgt-init-cls-loss 0.5 --lr 0.001 --grad-norm 0.5 
+python ./main_train_sae.py --device cuda:3 --hook-layer 50 --tgt-init-recon-loss 10 --tgt-init-cls-loss 0.5 --lr 0.002 --grad-norm 0.1 
