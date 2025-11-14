@@ -716,10 +716,14 @@ def set_style():
     
 
     c_darkorange_rgb = np.array([249, 97, 0])/255
+    c_orange_rgb = np.array([255, 165, 0])/255
     c_blue_rgb = np.array([60,126,176])/255
     c_white_rgb = np.array([255, 255, 255])/255
     c_navy_rgb = np.array([16, 19, 123])/255
+    c_gray_rgb = np.array([128, 128, 128])/255
+    c_lightgray_rgb = np.array([200, 200, 200])/255
 
     diverging_cmap = LinearSegmentedColormap.from_list('custom_cmap', [c_blue_rgb, c_white_rgb, c_darkorange_rgb])
     
-    return diverging_cmap, c_darkorange_rgb, c_blue_rgb, c_white_rgb, c_navy_rgb
+    return diverging_cmap, c_darkorange_rgb, c_orange_rgb, c_blue_rgb, c_white_rgb, c_navy_rgb, c_gray_rgb, c_lightgray_rgb
+
