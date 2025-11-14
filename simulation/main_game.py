@@ -105,7 +105,7 @@ class Simulation_Config:
                 "[Current task]. Send a single short message to Agent-B.\n"
                 "[Instruction]."
                 "\n- Provide ONLY the following JSON:\n{{\n  \"Agent-A message\": \"<your message>\"\n}}\n"
-=                "\n- The message should be 2-4 sentences long."
+                "\n- The message should be 2-4 sentences long."
                 "\n- {note}"
             ),
             'action': (
