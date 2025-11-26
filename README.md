@@ -13,7 +13,7 @@ The repository is organized into the following directories:
 - **`sae/`**: Scripts for the proposed Sentence-level, Supervised, Sparse Autoencoder (S3AE) implementation and training (Table 1, Figure 5).
 - **`QNA/`**: Experiments related to the unit intervention, dynamics, and resistance analysis under Q&A sessions (Figures 2A, 2B, 3D).
 - **`causal_inference/`**: Scripts for performing causal inference analysis (Figure 2F).
-- **`simulation/`**: Agentic simulation environments including counseling and game scenarios (Figure 3A).
+- **`simulation/`**: Simulation environments including counseling and game scenarios (Figure 3A).
 - **`analysis/`**: Scripts for generating figures and analyzing experimental results.
 - **`utils.py`**: Core configuration, data management, and model loading utilities.
 
