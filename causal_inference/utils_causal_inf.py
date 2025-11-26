@@ -1,10 +1,5 @@
 
 import os
-import sys
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
-sys.path.append(parent_dir)
-
 import re
 import copy
 import json
@@ -18,7 +13,7 @@ import warnings; warnings.filterwarnings("ignore")
 
 from tigramite import data_processing as pp
 from tigramite.jpcmciplus import JPCMCIplus
-from mlpCI import MLPCI
+from causal_inference.MLP_CI import MLPCI
 
 from utils import Config, Data_Manager
 

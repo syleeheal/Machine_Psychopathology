@@ -240,12 +240,11 @@ def generate_texts(cfg, model, tokenizer, batch_size, chats, df, task):
     return df
 
 
-def extract_activations(model, tokenizer, tf_lib, dfs, label_dict, batch_size, layers):
+def extract_activations(model, tokenizer, dfs, label_dict, batch_size, layers, label_type='thought'):
     
     print('Extracting activations...')
     
     output_prompts=list(dfs['output_text'])
-    
 
     # extract activations
     acts = dict()
@@ -254,28 +253,19 @@ def extract_activations(model, tokenizer, tf_lib, dfs, label_dict, batch_size, l
         
     with torch.no_grad(), torch.amp.autocast(dtype=torch.bfloat16, device_type='cuda'):
         for i in tqdm(range(0, len(output_prompts), batch_size)):
-
-            if tf_lib == 'lens':
-                act = model.run_with_cache(output_prompts[i: i+batch_size])
-                for layer in layers:
-                    hook_name = f'blocks.{layer}.hook_resid_post'
-                    _act = act[1][hook_name].mean(dim=1).detach().cpu()
-                    acts[layer].append(_act)
+        
+            inputs = tokenizer(output_prompts[i: i+batch_size], return_tensors="pt", padding=True).to('cuda:0')
+            output_act = model(**inputs, output_hidden_states=True).hidden_states
             
-            if tf_lib == 'hf':
-                inputs = tokenizer(output_prompts[i: i+batch_size], return_tensors="pt", padding=True).to('cuda:0')
-                output_act = model(**inputs, output_hidden_states=True).hidden_states
+            attention_mask = inputs['attention_mask']
+            for layer in layers:
+                last_hidden_state = output_act[layer+1]
+                input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+                sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
+                sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+                output_act_layer = sum_embeddings / sum_mask
                 
-                attention_mask = inputs['attention_mask']
-                for layer in layers:
-                    # _act = output_act[layer+1].mean(dim=1).detach().cpu()
-                    last_hidden_state = output_act[layer+1]
-                    input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
-                    sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
-                    sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-                    output_act_layer = sum_embeddings / sum_mask
-                    
-                    acts[layer].append(output_act_layer.detach().cpu())
+                acts[layer].append(output_act_layer.detach().cpu())
             
             # empty gpu memory
             if i % (batch_size * 100) == 0:
@@ -285,25 +275,42 @@ def extract_activations(model, tokenizer, tf_lib, dfs, label_dict, batch_size, l
     X = dict()
     for layer in layers:
         X[layer] = torch.cat(acts[layer], dim=0)
-    # X = torch.cat(acts, dim=0)
 
-    # construct y_onehot
-    y = torch.zeros(len(dfs), len(label_dict.keys()))
-    for label in label_dict.keys():
-        for i in range(len(dfs)):
-            if (dfs[label][i] == 1):
-                y[i, label_dict[label]] = 1
-
-    print('Done!')
+    if label_type == 'thought':
+        # construct y_onehot
+        y = torch.zeros(len(dfs), len(label_dict.keys()))
+        for label in label_dict.keys():
+            for i in range(len(dfs)):
+                if (dfs[label][i] == 1):
+                    y[i, label_dict[label]] = 1
+        return X, y
     
-    return X, y
+    elif label_type == 'severity':
+        # construct y_sev
+        sev_mapping = {'no':0, 'low':1, 'high':2}
+        y_sev = torch.zeros(len(dfs), dtype=torch.long)
+        for i in range(len(dfs)):
+            y_sev[i] = sev_mapping[dfs['severity'][i]]
+            
+        idx = dfs['label'].map({list(label_dict.keys())[i]:i for i in range(len(list(label_dict.keys())))})
+        y = torch.zeros(len(dfs), len(list(label_dict.keys())))
+        y[torch.arange(len(dfs)), idx] = 1
+        
+        return X, y, y_sev
+                
+
+    
+    
 
 
-def postprocess_data(cfg,_label_dict: Dict[str, str],filter_acc_threshold: float = 0.4,):
+def postprocess_thought_label_data(cfg, label_dict,):
+
+    # Initialize labels including 'none'
+    label_list = list(label_dict.keys()) + ['none']
 
     # Vectorized label extraction using list comprehension with escaped special characters
-    def extract_labels(text: str) -> List[str]:
-        return [label for label in (list(_label_dict.keys()) + ['none']) 
+    def extract_labels(text):
+        return [label for label in (list(label_dict.keys()) + ['none']) 
                 if re.search(rf'\b{(label)}\b', text, re.IGNORECASE)]
 
     # measure percent of labels that match
@@ -324,6 +331,9 @@ def postprocess_data(cfg,_label_dict: Dict[str, str],filter_acc_threshold: float
         print(f'Counter: {counter}, Matches: {matches}, Percent Match: {matches/counter*100:.2f}%')
         return filt_label
 
+    ### ------------------------------------------------
+    # load llm prediction results from gpt and gemini => keep only matching predictions
+    ### ------------------------------------------------
 
     df_path_0 = f'{cfg.llm_pred_dir}/{cfg.df_file_name}_gpt_v{cfg.current_v}.csv'
     df_0 = pd.read_csv(df_path_0)
@@ -342,57 +352,43 @@ def postprocess_data(cfg,_label_dict: Dict[str, str],filter_acc_threshold: float
     df_0 = df_0.sort_values(by='output_text').reset_index(drop=True)
     df_1 = df_1.sort_values(by='output_text').reset_index(drop=True)
     
-    # sample 20 percent of the  indices
-    idx = random.sample(range(len(df_0)), k=int(len(df_0) * 0.1))
-    df_0 = df_0.iloc[idx]
-    df_1 = df_1.iloc[idx]
-    
-
+    # extract labels
     df_0['gpt_pred_label'] = df_0['gpt_pred_label'].apply(lambda x: re.sub(r'\([^)]*\)', '', x).strip())
     extracted_label_0 = [(extract_labels(pred)) for pred in df_0['gpt_pred_label']]
 
     df_1['gemini_pred_label'] = df_1['gemini_pred_label'].apply(lambda x: re.sub(r'\([^)]*\)', '', x).strip())
     extracted_label_1 = [(extract_labels(pred)) for pred in df_1['gemini_pred_label']]
 
-
+    # leave only matching labels as the final prediction
     pred_dfs = df_0.copy()
     pred_dfs.drop(columns=['gpt_pred_label'], inplace=True)
     pred_dfs['pred_label'] = measure_match(extracted_label_0, extracted_label_1)
     pred_dfs['pred_label'] = pred_dfs['pred_label'].apply(lambda x: ', '.join(x) if isinstance(x, list) else x)
     pred_dfs['pred_label'] = pred_dfs['pred_label'].apply(lambda x: re.sub(r'[[\[\]]]', '', x) if isinstance(x, str) else x)
     
-        
-    """
-    if llm prediction contains the true label -> make llm prediction the true (multi) label
-    if llm prediction does NOT contain the true label -> remove the sample
-    """
-
     df_path = f'{cfg.llm_pred_dir}/{cfg.df_file_name}_v{cfg.current_v}.csv'
     pred_dfs.to_csv(df_path, index=False)
-    pred_dfs = pd.read_csv(df_path)
 
+        
+    ### ------------------------------------------------
+    # if llm prediction contains the true label -> make llm prediction the true (multi) label
+    # if llm prediction does NOT contain the true label -> remove the sample
+    ### ------------------------------------------------
+
+    # set 'none' label based on severity and context
     pred_dfs.loc[pred_dfs['severity'] == 'no', 'label'] = 'none'
-    pred_dfs.loc[pred_dfs['severity'] == 'none', 'label'] = 'none'
     pred_dfs.loc[pred_dfs['context'] == 'analyze', 'label'] = 'none'
     pred_dfs.loc[pred_dfs['context'] == 'deny', 'label'] = 'none'
 
 
-    # Initialize labels including 'none'
-    label_dict = copy.deepcopy(_label_dict)
-    label_list = list(label_dict.keys()) + ['none']
+    # remove special characters from  label_preds
     label_preds = pred_dfs['pred_label'].values
-    
-    
-    # remove special characters from label_list and label_preds
-    label_list = [re.sub(r'\([^)]*\)', '', s).strip() for s in label_list]
     label_preds = [re.sub(r'\([^)]*\)', '', s).strip() for s in label_preds]
-    pred_dfs['label'] = pred_dfs['label'].apply(lambda x: re.sub(r'\([^)]*\)', '', x).strip())    
     extracted_labels = [extract_labels(pred) for pred in label_preds]
     
     
     # Create binary label matrix 
     label_matrix = pd.DataFrame(0, index=range(len(extracted_labels)), columns=label_list)
-    
     for idx, labels in enumerate(extracted_labels):
         if labels:  # Only update if labels exist
             label_matrix.loc[idx, labels] = 1
@@ -419,44 +415,55 @@ def postprocess_data(cfg,_label_dict: Dict[str, str],filter_acc_threshold: float
     print(f"Filtered {len(concat_df) - len(filtered_dfs)} out of {len(concat_df)} samples that llm_pred and true_labels do not match.")
 
     
-    # filter out low accuracy labels    
-    low_acc_labels = []
-    for label in label_list:
-        # if label == 'none': continue
-        preds = concat_df[concat_df['label'] == label][label] # use concat_df to get acc before filtering
-        acc = preds.sum() / len(preds)
-        if acc is not np.nan:
-            print(f'{label} Acc.: {acc:.2f}')
-        low_acc_labels.append(label) if acc < filter_acc_threshold else None
-    low_acc_labels = []
-
-    for label in low_acc_labels:
-        filtered_dfs = filtered_dfs[filtered_dfs['label'] != label]
-        filtered_dfs = filtered_dfs.drop(columns=[label])
-    print(f'Filtered {len(low_acc_labels)} low accuracy labels: {low_acc_labels}')
-    
-    
     # finalize 
     filtered_dfs = filtered_dfs.drop_duplicates()
     filtered_dfs = filtered_dfs.dropna().reset_index(drop=True)
-            
-    
-    # replace low accuracy labels from label_dict
-    for label in low_acc_labels:
-        label_dict.pop(label)
-    filtered_label_dict = {label: idx for idx, label in enumerate(label_dict.keys())}
-    print(f'Filtered label dict: {filtered_label_dict}')
-    
+                
     
     # save filtered dfs
     df_path = f'{cfg.filt_data_dir}/{cfg.df_file_name}_v{cfg.current_v}.csv'
-    filtered_dfs.to_csv(df_path,
-                    mode = 'a' if os.path.exists(df_path) else 'w',
-                    header=not os.path.exists(df_path),
-                    index=False)
+    filtered_dfs.to_csv(
+        df_path,
+        mode = 'a' if os.path.exists(df_path) else 'w',
+        header=not os.path.exists(df_path),
+        index=False
+    )
+
+    return filtered_dfs
 
 
-    return filtered_dfs, filtered_label_dict
+def postprocess_sev_label_data(cfg):
+    df_path_0 = f'{cfg.sev_pred_dir}/{cfg.df_file_name}_gpt_v{cfg.current_v}.csv'
+    df_0 = pd.read_csv(df_path_0)
+
+    df_path_1 = f'{cfg.sev_pred_dir}/{cfg.df_file_name}_gemini_v{cfg.current_v}.csv'
+    df_1 = pd.read_csv(df_path_1)
+
+    # remove duplicates 
+    df_0 = df_0.drop_duplicates(subset='output_text').reset_index(drop=True)
+    df_1 = df_1.drop_duplicates(subset='output_text').reset_index(drop=True)
+
+    df_0 = df_0[df_0['output_text'].isin(df_1['output_text'])].reset_index(drop=True)
+    df_1 = df_1[df_1['output_text'].isin(df_0['output_text'])].reset_index(drop=True)
+
+    # sort by output text
+    df_0 = df_0.sort_values(by='output_text').reset_index(drop=True)
+    df_1 = df_1.sort_values(by='output_text').reset_index(drop=True)
+
+    gpt_pred = df_0['gpt_pred_sev']
+    gemini_pred = df_1['gemini_pred_sev']
+    label = df_0['severity']
+
+    match = (gemini_pred == label) & (gpt_pred == label)
+    df_sev = df_0[match]
+    df_sev = df_sev.drop(columns=['gpt_pred_sev']).reset_index(drop=True)
+
+    df_path_sev = f'{cfg.sev_filt_dir}/{cfg.df_file_name}_v{cfg.current_v}.csv'
+    if not os.path.exists(cfg.sev_filt_dir):
+        os.makedirs(cfg.sev_filt_dir)
+    df_sev.to_csv(df_path_sev, index=False)
+    
+    return df_sev
 
 
 class Setup_Prompts:
@@ -972,6 +979,11 @@ class OpenAI_Async_Processor:
         elif task == 'generate-sev':df_path = self.cfg.sev_data_raw_dir
         elif task == 'predict-sev': df_path = self.cfg.sev_pred_dir
 
+        # if the df_path does not exist, create it
+        if not os.path.exists(df_path):
+            os.makedirs(df_path)
+
+
         if task == 'predict':
             df_path = f'{df_path}/{self.cfg.df_file_name}_gpt_v{self.cfg.current_v}.csv'
         elif task == 'predict-sev':
@@ -1079,6 +1091,9 @@ class Google_Async_Processor:
         elif task == 'predict':     df_path = self.cfg.llm_pred_dir
         elif task == 'generate-sev':df_path = self.cfg.sev_data_raw_dir
         elif task == 'predict-sev': df_path = self.cfg.sev_pred_dir
+        
+        if not os.path.exists(df_path):
+            os.makedirs(df_path)
 
         if task == 'predict':
             df_path = f'{df_path}/{self.cfg.df_file_name}_gemini_v{self.cfg.current_v}.csv'

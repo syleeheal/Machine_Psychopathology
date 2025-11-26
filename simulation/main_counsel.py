@@ -1,9 +1,4 @@
-
 import os
-import sys
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
-sys.path.append(parent_dir)
 import gc
 
 import re
@@ -17,23 +12,25 @@ import pandas as pd
 import numpy as np
 import torch
 
+from llm_steer import LLM_Steer_Manager
 
-# A placeholder for your custom modules until they are loaded in main()
-LLM_Steer_Manager = None 
+
 
 def parameter_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", type=str, default="0", )
-    parser.add_argument("--sample-id", type=int, default=None)
-    
-    parser.add_argument("--itv-t", type=int, nargs='+', default=[0,12])
+    parser.add_argument("--itv-t", type=int, default=None)
     
     parser.add_argument("--num-rounds", type=int, default=5)
-    parser.add_argument("--num-samples", type=int, default=24)
-    parser.add_argument("--batch-size", type=int, default=int(60))
-    
+    parser.add_argument("--num-samples", type=int, default=72)
+    parser.add_argument("--batch-size", type=int, default=int(36))
     parser.add_argument("--max-new-tokens", type=int, default=150)
     parser.add_argument("--temperature", type=float, default=0.5)
+    
+    parser.add_argument("--agent-a-id", type=str, default="Qwen/Qwen3-32B")
+    parser.add_argument("--agent-b-id", type=str, default="meta-llama/Llama-3.1-8B-Instruct")
+    
+    parser.add_argument("--verbose", type=bool, default=False)
     
     return parser.parse_args()
 
@@ -89,9 +86,7 @@ def extract_and_parse_json(text: str):
 
 class AgentA:
     def __init__(self, cfg, simul_cfg, model, tokenizer):
-        global LLM_Steer_Manager
-        if LLM_Steer_Manager is None:
-            from llm_steer import LLM_Steer_Manager
+
         self.cfg = cfg
         self.simul_cfg = simul_cfg
         self.tokenizer = tokenizer
@@ -106,7 +101,8 @@ class AgentA:
             if not indices_to_process:
                 break
 
-            print(f"Agent A - Attempt {attempt + 1}: Processing {len(indices_to_process)} items.")
+            if self.simul_cfg.verbose:
+                print(f"Agent A - Attempt {attempt + 1}: Processing {len(indices_to_process)} items.")
 
             current_batch_size = len(indices_to_process)
             current_histories = [history_batch[i] for i in indices_to_process]
@@ -144,16 +140,15 @@ class AgentA:
 
         for i in range(batch_size):
             if final_outputs[i] is None:
-                print(f"Agent A - Failed to generate valid JSON for item {i} after {max_retries} retries.")
-                final_outputs[i] = '{"error": "Max retries reached", "Agent-A response": "Failed to generate valid JSON."}'
+                if self.simul_cfg.verbose:
+                    print(f"Agent A - Failed to generate valid JSON for item {i} after {max_retries} retries.")
+                    final_outputs[i] = '{"error": "Max retries reached", "Agent-A response": "Failed to generate valid JSON."}'
 
         return final_outputs
 
 class AgentB:
     def __init__(self, cfg, simul_cfg, model, tokenizer):
-        global LLM_Steer_Manager
-        if LLM_Steer_Manager is None:
-            from llm_steer import LLM_Steer_Manager
+        
         self.cfg = cfg
         self.simul_cfg = simul_cfg
         self.tokenizer = tokenizer
@@ -176,8 +171,9 @@ class AgentB:
             for attempt in range(max_retries):
                 if not indices_to_process:
                     break
-
-                print(f"Agent B - Step '{step_key}' - Attempt {attempt + 1}: Processing {len(indices_to_process)} items.")
+                
+                if self.simul_cfg.verbose:
+                    print(f"Agent B - Step '{step_key}' - Attempt {attempt + 1}: Processing {len(indices_to_process)} items.")
 
                 current_histories = [history_batch[i] for i in indices_to_process]
                 current_assessments = [json.dumps(final_jsons[i]) for i in indices_to_process]
@@ -242,8 +238,9 @@ class AgentB:
 
             if indices_to_process:
                 for i in indices_to_process:
-                    print(f"Agent B - Step '{step_key}' - FAILED permanently for item {i}.")
-                    final_jsons[i][step_key] = f"ERROR: Failed to generate after {max_retries} retries."
+                    if self.simul_cfg.verbose:
+                        print(f"Agent B - Step '{step_key}' - FAILED permanently for item {i}.")
+                        final_jsons[i][step_key] = f"ERROR: Failed to generate after {max_retries} retries."
 
         final_outputs = [json.dumps(j) for j in final_jsons]
         return final_outputs
@@ -251,6 +248,8 @@ class AgentB:
 class Simulation_Config:
 
     def __init__(self, args, cfg, dm, model):
+        
+        self.verbose = args.verbose
         
         self.dm = dm
         self.symp_label_dict  = dm.load_dict(dict_type='label')[0] 
@@ -261,8 +260,11 @@ class Simulation_Config:
         for layer in cfg.hook_layers:
             self.sae_dict[layer] = self.sae_dict[layer].to(self.device_dict[layer])
 
-        self.itv_t = list(self.symp_label_dict.keys())[args.itv_t[0]:args.itv_t[1]] if args.itv_t != [-1] else [None]
-        
+        if args.itv_t is not None:
+            self.itv_t = list(self.symp_label_dict.keys())[args.itv_t]
+        else:
+            self.itv_t = None
+
 
         self.generation_kwargs = {
             'max_new_tokens': args.max_new_tokens,
@@ -369,8 +371,8 @@ def run_simulation(simul_cfg, agent_a, agent_b, ids, topics, sevs, atts, itv_tho
             a_response = a_json.get("Agent-A response", f"Error in Agent A response: {a_json.get('error', 'Unknown')}")
             history[i] += f"\n--- Round {round_idx + 1} ---\nAgent A response: {a_response}\n"
             conversation_history[i].append({"agent": "A", "response": a_response})
-            
-            print(f"Round {round_idx+1}, Sample {i+1}, Agent-A: {a_response}\n")
+            if simul_cfg.verbose:            
+                print(f"Round {round_idx+1}, Sample {i+1}, Agent-A: {a_response}\n")
             
             a_responses.append(a_response)
 
@@ -383,10 +385,10 @@ def run_simulation(simul_cfg, agent_a, agent_b, ids, topics, sevs, atts, itv_tho
             history[j] += f"Agent-B response: {b_response}\n--- End of Round {round_idx + 1} ---\n"
             conversation_history[j].append({"agent": "B", "response": b_response})
             agent_b_decisions[j].append(b_json)
-            
-            print(f"Round {round_idx+1}, Sample {j+1}, Agent-B: {b_response}\n")
-            print(f"[Analysis]. Severity: {b_json.get('presented_problem_severity', 'N/A')}, Capacity: {b_json.get('my_capacity_to_help', 'N/A')}")
-            print(f"[Decision]. Action: {b_json.get('my_action', 'N/A')}\n")
+            if simul_cfg.verbose:
+                print(f"Round {round_idx+1}, Sample {j+1}, Agent-B: {b_response}\n")
+                print(f"[Analysis]. Severity: {b_json.get('presented_problem_severity', 'N/A')}, Capacity: {b_json.get('my_capacity_to_help', 'N/A')}")
+                print(f"[Decision]. Action: {b_json.get('my_action', 'N/A')}\n")
             
             b_responses.append(b_response)
             b_analysis_sevs.append(b_json.get("presented_problem_severity", "N/A"))
@@ -417,67 +419,37 @@ def main():
     args = parameter_parser()
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
-    from utils import Config, Data_Manager, model_selection
     
-    agent_a_list = [
-        'Qwen/Qwen3-14B', 
-        "google/gemma-3-12b-it",
-        "meta-llama/Llama-3.1-8B-Instruct", 
-        "Qwen/Qwen3-32B",
-    ]
-    agent_b_list = [
-        "google/gemma-3-270m-it", 
-        "Qwen/Qwen3-0.6B", 
-        "meta-llama/Llama-3.2-1B-Instruct", 
-        "Qwen/Qwen3-1.7B", 
-        "meta-llama/Llama-3.2-3B-Instruct", 
-        "google/gemma-3-4b-it", 
-        "meta-llama/Llama-3.1-8B-Instruct", 
-        "Qwen/Qwen3-14B", 
-        "google/gemma-3-12b-it", 
-        "Qwen/Qwen3-32B",
-        "google/gemma-3-27b-it",
-        "meta-llama/Llama-3.3-70B-Instruct",
-    ]
+    from utils import Config, Data_Manager, model_selection
 
-    for agent_a, agent_b in itertools.product(agent_a_list, agent_b_list):
+    cfg_a = Config(model_id=args.agent_a_id)
+    cfg_b = Config(model_id=args.agent_b_id)
+
+    dm = Data_Manager(cfg_b)
+
+    model_a, tokenizer_a = model_selection(cfg_a)
+    model_b, tokenizer_b = model_selection(cfg_b)
+    simul_cfg = Simulation_Config(args, cfg_b, dm, model_b)
+
+    agent_a = AgentA(cfg_a, simul_cfg, model_a, tokenizer_a)
+    agent_b = AgentB(cfg_b, simul_cfg, model_b, tokenizer_b)
+
+    sample_ids = list(range(args.num_samples)) 
+    topics, sevs, atts = get_topic_sev_att_pairs(args.num_samples)
+
+    print(f"\n--- Running Simulation: Intervention='{simul_cfg.itv_t}' ---")
+    
+    for start_idx in range(0, args.num_samples, args.batch_size):
         
-        cfg_a = Config(model_id=agent_a)
-        cfg_b = Config(model_id=agent_b)
+        batch_size = min(args.batch_size, args.num_samples - start_idx)
+        batch_ids = sample_ids[start_idx:start_idx + batch_size]
+        batch_topics = topics[start_idx:start_idx + batch_size]
+        batch_sevs = sevs[start_idx:start_idx + batch_size]
+        batch_atts = atts[start_idx:start_idx + batch_size]
 
-        dm = Data_Manager(cfg_b)
-
-        model_a, tokenizer_a = model_selection(cfg_a)
-        model_b, tokenizer_b = model_selection(cfg_b)
-        simul_cfg = Simulation_Config(args, cfg_b, dm, model_b)
-
-        if agent_b in ["google/gemma-3-12b-it", "Qwen/Qwen3-32B", "meta-llama/Llama-3.3-70B-Instruct", "google/gemma-3-27b-it"]:
-            args.batch_size = 30
-
-        agent_a = AgentA(cfg_a, simul_cfg, model_a, tokenizer_a)
-        agent_b = AgentB(cfg_b, simul_cfg, model_b, tokenizer_b)
-
-        sample_ids = list(range(args.num_samples)) 
-        sample_ids = [i + int(args.num_samples) for i in sample_ids]; print("[warning] Using sample ids:", sample_ids)
-        topics, sevs, atts = get_topic_sev_att_pairs(args.num_samples)
-
-        for itv_thought in simul_cfg.itv_t:
-            print(f"\n--- Running Simulation: Intervention='{itv_thought}' ---")
-            
-            for start_idx in range(0, args.num_samples, args.batch_size):
-                
-                batch_size = min(args.batch_size, args.num_samples - start_idx)
-                batch_ids = sample_ids[start_idx:start_idx + batch_size]
-                batch_topics = topics[start_idx:start_idx + batch_size]
-                batch_sevs = sevs[start_idx:start_idx + batch_size]
-                batch_atts = atts[start_idx:start_idx + batch_size]
-
-                all_decisions, all_conv_histories = run_simulation(
-                    simul_cfg, agent_a, agent_b, batch_ids, batch_topics, batch_sevs, batch_atts, itv_thought, batch_size=batch_size
-                )
-
-        del model_a, tokenizer_a, model_b, tokenizer_b, agent_a, agent_b
-        torch.cuda.empty_cache(); gc.collect()
+        all_decisions, all_conv_histories = run_simulation(
+            simul_cfg, agent_a, agent_b, batch_ids, batch_topics, batch_sevs, batch_atts, simul_cfg.itv_t, batch_size=batch_size
+        )
 
 if __name__ == "__main__":
     main()

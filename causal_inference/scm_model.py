@@ -139,9 +139,8 @@ class StructuralEquationModeler:
             y_hat = np.expm1(y_hat)
             r2 = r2_score(y_test, y_hat)
             mse_error = np.mean((y_test - y_hat) ** 2)
-            mse_error_scaled = mse_error / (np.var(y_test) + 1e-8)
 
-            perf_rows.append({'var': var, 'r2': round(r2, 2), 'mse_error': round(mse_error, 2), 'mse_error_scaled': round(mse_error_scaled, 2)})
+            perf_rows.append({'var': var, 'r2': round(r2, 2), 'mse_error': round(mse_error, 2),})
 
         return pd.DataFrame(perf_rows)
 
@@ -209,61 +208,79 @@ class StructuralEquationModeler:
         return pd.concat(all_rows, axis=0).reset_index(drop=True)
 
     def _compute_aie_for_child(self, var, model, data_list, n_context, **kwargs):
-        """Computes AIE for edges into a single child variable."""
-        q_low = kwargs.get('q_low', 0.1)
-        q_high = kwargs.get('q_high', 0.9)
-        q_len = kwargs.get('q_len', 0.1)
-        per_child_normalize = kwargs.get('per_child_normalize', True)
+            """
+            Computes AIE as the average derivative (dy/dx) over the population
+            using the finite difference method.
+            """
+            # Hyperparameter for numerical derivative step size
+            epsilon = kwargs.get('epsilon', 1e-5) 
+            per_child_normalize = kwargs.get('per_child_normalize', False)
 
-        rng = np.random.default_rng(self.random_state)
-        
-        X_context, _, parents_0, parents_1 = self._prepare_timeseries_io(data_list, var)
-        
-        if X_context.shape[0] < n_context:
-            n_context = X_context.shape[0]
-            print(f"Warning: n_context ({kwargs.get('n_context', 5000)}) > available data ({X_context.shape[0]}). Using {n_context} samples.")
-        
-        if n_context == 0:
-             return pd.DataFrame()
-
-        X_sample = X_context[rng.choice(X_context.shape[0], size=n_context, replace=False)]
-
-        idx_map = {}
-        for col, p in enumerate(parents_0): idx_map[col] = (p, 0)
-        for col, p in enumerate(parents_1): idx_map[col + len(parents_0)] = (p, 1)
-
-        yhat = model.predict(X_sample)
-        yhat = np.expm1(yhat)
-        f_range = np.maximum(np.ptp(yhat), 1e-8)
-        
-        rows = []
-        for col_idx, (parent, lag) in idx_map.items():
-            pairs = list(zip(np.arange(q_low, q_high, q_len), np.arange(q_low + q_len, q_high + q_len, q_len)))
+            rng = np.random.default_rng(self.random_state)
             
-            X_context_col = X_context[:, col_idx]
-            X_min = np.min(X_context_col)
-            X_max = np.max(X_context_col)
+            # 1. Prepare Context Data (Baseline)
+            X_context, _, parents_0, parents_1 = self._prepare_timeseries_io(data_list, var)
             
-            deltas = []
-            for ql, qh in pairs:
-                X_lo, X_hi = X_sample.copy(), X_sample.copy()
-                X_lo[:, col_idx], X_hi[:, col_idx] = ql, qh
-                y_hi = model.predict(X_hi) 
-                y_lo = model.predict(X_lo) 
-                y_hi = np.expm1(y_hi)
-                y_lo = np.expm1(y_lo)
-                delta = y_hi - y_lo
-                deltas.append(delta)
+            if X_context.shape[0] < n_context:
+                n_context = X_context.shape[0]
             
-            w_raw_mag = float(np.mean([np.mean(np.abs(d)) for d in deltas]))
-            w_raw_signed = float(np.mean([np.mean(d) for d in deltas]))
-            rows.append({"child": var, "parent": parent, "lag": lag, "w_raw_mag": w_raw_mag, "sign": np.sign(w_raw_signed)})
+            if n_context == 0:
+                return pd.DataFrame()
 
-        df = pd.DataFrame(rows)
-        if not df.empty:
-            denom = np.maximum(df["w_raw_mag"].abs().sum(), 1e-12)
-            if per_child_normalize:
-                df["w_norm"] = df["w_raw_mag"].abs() / denom
-            else:
-                df["w_norm"] = df["w_raw_mag"] / f_range
-        return df
+            # Sample N instances from the population
+            X_sample = X_context[rng.choice(X_context.shape[0], size=n_context, replace=False)]
+
+            # Map columns to parent names
+            idx_map = {}
+            for col, p in enumerate(parents_0): idx_map[col] = (p, 0)
+            for col, p in enumerate(parents_1): idx_map[col + len(parents_0)] = (p, 1)
+
+            # 2. Get Baseline Predictions (in original Y scale)
+            yhat_log = model.predict(X_sample)
+            yhat_base = np.expm1(yhat_log) # Transform back: exp(y) - 1
+            
+            # Calculate range for potential normalization
+            f_range = np.maximum(np.ptp(yhat_base), 1e-8)
+            
+            rows = []
+            for col_idx, (parent, lag) in idx_map.items():
+                
+                # 3. Create Perturbed Data (X + epsilon)
+                X_plus = X_sample.copy()
+                X_plus[:, col_idx] += epsilon
+                
+                # 4. Predict on Perturbed Data
+                yhat_plus_log = model.predict(X_plus)
+                yhat_plus = np.expm1(yhat_plus_log) # Transform back
+                
+                # 5. Calculate Local Gradients (Finite Difference)
+                # dy/dx approx (y_plus - y_base) / epsilon
+                local_gradients = (yhat_plus - yhat_base) / epsilon
+                
+                # 6. Average over the population (Average Marginal Effect)
+                # This estimates E[dy/dx]
+                avg_gradient = np.mean(local_gradients)
+                avg_abs_gradient = np.mean(np.abs(local_gradients))
+
+                rows.append({
+                    "child": var, 
+                    "parent": parent, 
+                    "lag": lag, 
+                    "w_raw_mag": avg_abs_gradient, # Magnitude of sensitivity
+                    "w_signed": avg_gradient,      # The actual directional derivative
+                    "sign": np.sign(avg_gradient)
+                })
+
+            df = pd.DataFrame(rows)
+            
+            # 7. Normalization (Optional)
+            if not df.empty:
+                if per_child_normalize:
+                    # Normalize by sum of sensitivities (Feature Importance style)
+                    denom = np.maximum(df["w_raw_mag"].abs().sum(), 1e-12)
+                    df["w_norm"] = df["w_raw_mag"].abs() / denom
+                else:
+                    # Normalize by the range of Y (Effect size relative to Y's scale)
+                    df["w_norm"] = df["w_raw_mag"] / f_range
+                    
+            return df

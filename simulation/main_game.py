@@ -1,10 +1,6 @@
 import os
-import sys
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
-sys.path.append(parent_dir)
-
 import gc
+
 import itertools
 import re
 import json
@@ -17,13 +13,18 @@ from llm_steer import LLM_Steer_Manager
 def parameter_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", type=str, default="0")
-    parser.add_argument("--itv-t", type=int, nargs='+', default=[0,12])
+    parser.add_argument("--itv-t", type=int, default=None)
 
     parser.add_argument("--num-rounds", type=int, default=5)
-    parser.add_argument("--num-samples", type=int, default=25)
+    parser.add_argument("--num-samples", type=int, default=75)
     parser.add_argument("--batch-size", type=int, default=int(25))
     parser.add_argument("--max-new-tokens", type=int, default=120)
     parser.add_argument("--temperature", type=float, default=0.5)
+    
+    parser.add_argument("--agent-a-id", type=str, default="Qwen/Qwen3-32B")
+    parser.add_argument("--agent-b-id", type=str, default="meta-llama/Llama-3.1-8B-Instruct")
+    
+    parser.add_argument("--verbose", type=bool, default=False)
     return parser.parse_args()
 
 
@@ -50,6 +51,7 @@ def get_strategy_list(n):
 
 class Simulation_Config:
     def __init__(self, args, cfg, dm, model):
+        self.verbose = args.verbose
         self.dm = dm
         self.symp_label_dict  = dm.load_dict(dict_type='label')[0] 
         self.device_dict = dm.load_dict(dict_type='device', model=model)
@@ -59,7 +61,10 @@ class Simulation_Config:
         for layer in cfg.hook_layers:
             self.sae_dict[layer] = self.sae_dict[layer].to(self.device_dict[layer])
 
-        self.itv_t = list(self.symp_label_dict.keys())[args.itv_t[0]:args.itv_t[1]] if args.itv_t != [-1] else [None]
+        if args.itv_t is not None:
+            self.itv_t = list(self.symp_label_dict.keys())[args.itv_t]
+        else:
+            self.itv_t = None
 
         self.generation_kwargs = {
             'max_new_tokens': args.max_new_tokens,
@@ -699,11 +704,12 @@ def run_simulation(simul_cfg, agent_a, agent_b, ids, a_strategies, itv_thought, 
                 f"\n--- End of Round {round_idx + 1} ---\n"
             )
             
-            print(f"\n---------------- itv-{itv_thought} | Sample {ids[i]} | Round {round_idx + 1} ----------------\n")
-            print(f"A strategy: {a_strategies[i]} | B strategy: {b_strategies[i]} | B trust: {b_trusts[i]} \n A action: {a_actions[i]} | B action: {b_actions[i]} \n A total: {a_total_sp[i]} | B total: {b_total_sp[i]}")
-            print(f"\nAgent-A message:\n{a_msgs[i]}\n"
-                  f"\nAgent-B message:\n{b_msgs[i]}\n")
-            print("\n-----------------------------------------------------------------------------\n")
+            if simul_cfg.verbose:
+                print(f"\n---------------- itv-{simul_cfg.itv_t} | Sample {ids[i]} | Round {round_idx + 1} ----------------\n")
+                print(f"A strategy: {a_strategies[i]} | B strategy: {b_strategies[i]} | B trust: {b_trusts[i]} \n A action: {a_actions[i]} | B action: {b_actions[i]} \n A total: {a_total_sp[i]} | B total: {b_total_sp[i]}")
+                print(f"\nAgent-A message:\n{a_msgs[i]}\n"
+                      f"\nAgent-B message:\n{b_msgs[i]}\n")
+                print("\n-----------------------------------------------------------------------------\n")
             
 
         # Save round results
@@ -732,57 +738,29 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
 
     from utils import Config, Data_Manager, model_selection
+    
+    cfg_a = Config(model_id=args.agent_a_id)
+    cfg_b = Config(model_id=args.agent_b_id)
 
-    agent_a_list = [
-        'Qwen/Qwen3-14B', 
-        "google/gemma-3-12b-it",
-        "meta-llama/Llama-3.1-8B-Instruct", 
-        "Qwen/Qwen3-32B",
-    ]
-    agent_b_list = [
-        "google/gemma-3-270m-it", 
-        "Qwen/Qwen3-0.6B", 
-        "meta-llama/Llama-3.2-1B-Instruct", 
-        "Qwen/Qwen3-1.7B", 
-        "meta-llama/Llama-3.2-3B-Instruct", 
-        "google/gemma-3-4b-it", 
-        "meta-llama/Llama-3.1-8B-Instruct", 
-        "Qwen/Qwen3-14B", 
-        "google/gemma-3-12b-it", 
-        "Qwen/Qwen3-32B",
-        "google/gemma-3-27b-it",
-        "meta-llama/Llama-3.3-70B-Instruct",
-    ]
+    dm = Data_Manager(cfg_b)
 
-    for agent_a, agent_b in itertools.product(agent_a_list, agent_b_list):
-        
-        cfg_a = Config(model_id=agent_a)
-        cfg_b = Config(model_id=agent_b)
+    model_a, tokenizer_a = model_selection(cfg_a)
+    model_b, tokenizer_b = model_selection(cfg_b)
+    simul_cfg = Simulation_Config(args, cfg_b, dm, model_b)
 
-        dm = Data_Manager(cfg_b)
+    agent_a = AgentA(cfg_a, simul_cfg, model_a, tokenizer_a)
+    agent_b = AgentB(cfg_b, simul_cfg, model_b, tokenizer_b)
 
-        model_a, tokenizer_a = model_selection(cfg_a)
-        model_b, tokenizer_b = model_selection(cfg_b)
-        simul_cfg = Simulation_Config(args, cfg_b, dm, model_b)
+    sample_ids = list(range(args.num_samples))
+    a_strategies = get_strategy_list(args.num_samples)
 
-        agent_a = AgentA(cfg_a, simul_cfg, model_a, tokenizer_a)
-        agent_b = AgentB(cfg_b, simul_cfg, model_b, tokenizer_b)
+    print(f"\n--- Running Simulation: Intervention='{simul_cfg.itv_t}' ---")
 
-        sample_ids = list(range(args.num_samples))
-        sample_ids = [i + int(args.num_samples) for i in sample_ids]; print("[warning] Using sample ids:", sample_ids)
-        a_strategies = get_strategy_list(args.num_samples)
-
-        for itv_thought in simul_cfg.itv_t:
-            print(f"\n--- Running Simulation: Intervention='{itv_thought}' ---")
-
-            for start in range(0, args.num_samples, args.batch_size):
-                batch_size = min(args.batch_size, args.num_samples - start)
-                batch_ids = sample_ids[start:start + batch_size]
-                batch_strategies = a_strategies[start:start + batch_size]
-                run_simulation(simul_cfg, agent_a, agent_b, batch_ids, batch_strategies, itv_thought, batch_size=batch_size)
-
-        del model_a, tokenizer_a, model_b, tokenizer_b, agent_a, agent_b
-        torch.cuda.empty_cache(); gc.collect()
+    for start in range(0, args.num_samples, args.batch_size):
+        batch_size = min(args.batch_size, args.num_samples - start)
+        batch_ids = sample_ids[start:start + batch_size]
+        batch_strategies = a_strategies[start:start + batch_size]
+        run_simulation(simul_cfg, agent_a, agent_b, batch_ids, batch_strategies, simul_cfg.itv_t, batch_size=batch_size)
 
 if __name__ == "__main__":
     main()

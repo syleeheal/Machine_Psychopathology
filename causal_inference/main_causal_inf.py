@@ -1,10 +1,5 @@
 
 import os
-import sys
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
-sys.path.append(parent_dir)
-
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -20,11 +15,12 @@ import warnings; warnings.filterwarnings("ignore")
 
 from tigramite import data_processing as pp
 from tigramite.jpcmciplus import JPCMCIplus
-from MLP_CI import MLPCI
 
-from utils import Config, Data_Manager, df2obs
-from utils_causal_inf import get_link_assumptions, causal_inference, bootstrapped_samples
+from utils import Config, Data_Manager
 
+from causal_inference.MLP_CI import MLPCI
+from causal_inference.utils_causal_inf import causal_inference, bootstrapped_samples
+from analysis.utils_figs import df2obs
 
 import multiprocessing
 multiprocessing.set_start_method("fork", force=True)
@@ -35,7 +31,6 @@ if hasattr(os, 'sched_setaffinity'):
     print(f"This machine has {cpu_count} CPUs.")
     
     
-    
 
 if __name__ == "__main__":
     
@@ -43,7 +38,7 @@ if __name__ == "__main__":
     dm = Data_Manager(cfg)
     print(f"Processing model: {cfg.model_id} \n")
 
-    # set random seed for reproducibility
+    # set random seed for reproducibility 
     random_seed = 42
     random.seed(random_seed)
     np.random.seed(random_seed)
@@ -85,7 +80,7 @@ if __name__ == "__main__":
     }
 
     bootstrap_params = {
-        'num_samples': 50,
+        'num_samples': 100,
         'replacement': False,
         'rng': rng,
         'k': 1,
@@ -94,7 +89,7 @@ if __name__ == "__main__":
     sample_size = bootstrap_params['k'] * dataset_length * num_itv_types * len(cxt_vars)
 
     causal_inference_params = {
-        'ci_test': PolyRegCI(dataset_length=dataset_length, **ci_params),
+        'ci_test': MLPCI(dataset_length=dataset_length, **ci_params),
         'alpha': 0.01,
         'tau_max': 1,
         'tau_min': 0,

@@ -1,6 +1,7 @@
 import os
 os.environ['HF_HOME'] = './HF/hf_home'
 os.environ['HF_HUB_CACHE'] = './HF/hub'
+
 # from huggingface_hub import interpreter_login; interpreter_login()
 
 import json
@@ -17,9 +18,7 @@ from openai import OpenAI
 from google import genai
 
 from sae.sae import S3AE
-
-import seaborn as sns
-import matplotlib.pyplot as plt
+from huggingface_hub import snapshot_download
 
 
 class Config:
@@ -71,7 +70,7 @@ class Config:
 
         # directories
         self.data_dir = f'./data{self.feat_type}'
-        self.outcome_dir =  f'./out_data/{self.model_id}'
+        self.outcome_dir =  f'./data/{self.model_id}'
         
         self.raw_data_dir = f'{self.data_dir}/raw_data_v{self.current_v[0]}'
         self.filt_data_dir = f'{self.data_dir}/filt_data_v{self.current_v[0]}'
@@ -87,6 +86,7 @@ class Config:
         self.itv_str_dir = f'{self.outcome_dir}/itv_strength_v{self.current_v[0]}'
 
         self.spread_eval_dir = f'{self.outcome_dir}/spread_eval_v{self.current_v[0]}'
+        self.act_corr_eval_dir = f'{self.outcome_dir}/act_corr_eval_v{self.current_v[0]}'
         self.resist_ctrl_dir = f'{self.outcome_dir}/resist_ctrl_v{self.current_v[0]}'
         self.resist_itvn_dir = f'{self.outcome_dir}/resist_itvn_v{self.current_v[0]}'
         self.causal_inf_dir = f'{self.outcome_dir}/causal_inf_v{self.current_v[0]}'
@@ -143,7 +143,32 @@ class Data_Manager:
             return torch.load(f'{self.cfg.outcome_dir}/layer_{hook_layer}/{self.cfg.y_file_name}_v{self.cfg.current_v}.pt', weights_only=True)
             
         if data_type == 'sae':
-            state_dict = torch.load(f'./{self.cfg.outcome_dir}/layer_{hook_layer}/sae{self.cfg.feat_type}_{hook_layer}_v{self.cfg.current_v}.pt', weights_only=True)
+            
+            path = f'./{self.cfg.outcome_dir}/layer_{hook_layer}/sae{self.cfg.feat_type}_{hook_layer}_v{self.cfg.current_v}.pt'
+
+            # if file does not exist, download from hf hub
+            if not os.path.exists(path):
+
+                folder = f'layer_{hook_layer}'                
+                folder_path = f'./{self.cfg.outcome_dir}'
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path, exist_ok=True)
+                
+                model_id_short = self.cfg.model_id.split('/')[-1]
+                repo_id = f'syleetolow/s3ae_{model_id_short}'
+                
+                print(f'Downloading S3AE from {repo_id}, folder: {folder}...')
+                snapshot_download(
+                    repo_id=repo_id,
+                    repo_type='model',
+                    allow_patterns=f"{folder}/*",  # <--- This restricts download to the 'unet' folder
+                    local_dir=folder_path,
+                    local_dir_use_symlinks=False,
+                )
+            
+            state_dict = torch.load(path, weights_only=True)
+            
+            
             sae = S3AE(
                 input_dim=state_dict['encoder.weight'].shape[1],
                 hidden_dim=state_dict['encoder.weight'].shape[0],
@@ -162,6 +187,8 @@ class Data_Manager:
             path = f'{self.cfg.resist_itvn_dir}/{self.cfg.out_file_name}_v{self.cfg.current_v}.csv'
         if data_type == 'itv_eval':
             path = f'{self.cfg.itv_eval_dir}/{self.cfg.out_file_name}_v{self.cfg.current_v}.csv'
+        if data_type == 'act_corr_eval':
+            path = f'{self.cfg.act_corr_eval_dir}/{self.cfg.out_file_name}_v{self.cfg.current_v}.csv'
         if data_type == 'itv_str_sweep':
             path = f'{self.cfg.itv_str_sweep_dir}/{self.cfg.out_file_name}_v{self.cfg.current_v}.csv'
         if data_type == 'itv_str_selection':
@@ -240,6 +267,10 @@ class Data_Manager:
                 cols = ['sample_id', 'step', 'itv_type', 'itv_thought', 'itv_str', 'itv_str_layer', 'query', 'output_text', 'sae_preds']
                 df = pd.DataFrame(columns=cols)
                 df.to_csv(path, index=False)
+            df = pd.read_csv(path, engine='python')
+
+        if data_type == 'act_corr_eval':
+            path = f'{self.cfg.act_corr_eval_dir}/{self.cfg.out_file_name}_v{self.cfg.current_v}.csv'
             df = pd.read_csv(path, engine='python')
         
         if data_type == 'robust':
@@ -328,8 +359,18 @@ class Data_Manager:
                 
                 X_dict[layer] = torch.load(X_path, weights_only=True)
                 Y = torch.load(y_path, weights_only=True)
-                Y = Y[:, (Y.sum(0) > 0)] # remove y columns with all zeros
             return X_dict, Y
+
+        elif dict_type == 'activation-sev':
+            X_dict = {}
+            for layer in self.cfg.hook_layers:
+                y_path = f'{self.cfg.outcome_dir}/layer_{layer}/{self.cfg.y_file_name}_sev_v{self.cfg.current_v}.pt'
+                X_path = f'{self.cfg.outcome_dir}/layer_{layer}/{self.cfg.X_file_name}_sev_v{self.cfg.current_v}.pt'
+                
+                X_dict[layer] = torch.load(X_path, weights_only=True)
+                Y = torch.load(y_path, weights_only=True)
+            return X_dict, Y
+
 
         elif dict_type == 'act-std':
             std_dict = {}
@@ -380,7 +421,7 @@ def model_selection(cfg):
             cfg.model_id,
             device_map='auto', 
             dtype=torch.bfloat16,   
-            attn_implementation="flash_attention_2", 
+            # attn_implementation="flash_attention_2", 
             quantization_config=quantization_config,
         )
         
@@ -390,7 +431,7 @@ def model_selection(cfg):
             cfg.model_id, 
             device_map='auto', 
             dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2", 
+            # attn_implementation="flash_attention_2", 
         )
     
     model.eval()
@@ -512,6 +553,7 @@ def load_batch_size_dict(cfg):
         75,
         45
     ]
+    batch_size_list = [bs // 5 for bs in batch_size_list]
     
     batch_size_dict = dict(zip(model_list, batch_size_list))
     return batch_size_dict
@@ -618,55 +660,6 @@ def load_dim_qkey_dict(dim_keys, symp_keys, subdim_keys):
     return dim_qkey_dict
 
 
-def df2obs(out_df, itv_type, itv_thought, sample_id, step, unit, dim_qkey_dict, abbv_dict=None):
-
-    # convert column 'sae_preds' into multiple columns
-    if abbv_dict is not None:
-        new_cols = list(abbv_dict.values())
-    
-    sea_preds = out_df['sae_preds']
-    sea_preds = np.array(sea_preds.apply(lambda x: json.loads(x)).tolist()) # convert string to list to np.array
-    out_df = pd.concat([out_df, pd.DataFrame(sea_preds, columns=new_cols)], axis=1)
-    out_df = out_df.drop(['sae_preds', 'output_text', 'itv_str', 'itv_str_layer'], axis=1)    
-    
-    if abbv_dict is not None:
-        out_df['itv_thought'] = out_df['itv_thought'].map(abbv_dict).fillna('none')
-        
-    # aggregate for each sample and step
-    obs = out_df.copy()
-    obs_by_dim = []
-    for key_list in dim_qkey_dict.values():
-        _obs = obs[obs['query'].isin(key_list)].drop('query', axis=1)
-        _obs = _obs.groupby(['itv_type', 'itv_thought', 'step', 'sample_id']).max() # max pool by question group within each dimension
-        obs_by_dim.append(_obs)
-    obs = pd.concat(obs_by_dim)
-    obs = obs.groupby(['itv_type', 'itv_thought', 'step', 'sample_id']).sum() # sum pool by all dimensions
-    
-    # filter for specific itv_type, itv_thought, sample_id, and step
-    obs = obs[obs.index.get_level_values('itv_type').isin(itv_type)]
-    obs = obs[obs.index.get_level_values('itv_thought').isin(itv_thought)]
-    obs = obs[obs.index.get_level_values('step').isin(step)]
-    obs = obs[obs.index.get_level_values('sample_id').isin(sample_id)]
-    
-    # convert column 'itv_thought' into multiple columns
-    itv = pd.DataFrame(columns=unit + ['none'], data=np.zeros((len(obs), len(unit)+1)))
-    itv_vals = obs.reset_index()['itv_thought']
-    itv_types = obs.reset_index()['itv_type']
-    for i in range(len(itv_vals)): 
-        itv.loc[i, itv_vals[i]] = 0 if itv_types[i] == 'phase_4' else 1
-
-    itv = itv.reset_index(drop=True)
-    itv = itv.loc[:, (itv != 0).any(axis=0)].fillna(0)
-    itv.columns = itv.columns + '_itv'
-    if 'none_itv' in itv.columns:
-        itv = itv.drop('none_itv', axis=1)
-            
-    obs_itv = pd.concat([obs.reset_index(), itv], axis=1)
-    obs_itv.set_index(['itv_type', 'sample_id', 'itv_thought', 'step'], inplace=True)
-
-    return obs, itv, obs_itv
-
-
 def data_split(X, y, batch_size, train_size=1):
     
     if train_size != 1:
@@ -692,38 +685,4 @@ def data_split(X, y, batch_size, train_size=1):
         
     return dataloader_train, dataloader_test
 
-
-def set_style():
-    sns.set_context('paper', font_scale=1.2, rc={"lines.linewidth": 2.5})
-    sns.set_style('whitegrid', {'axes.edgecolor': '0.2', 'grid.linestyle': '-'})
-
-    plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.sans-serif'] = ['Helvetica', 'TeX Gyre Heros', 'Liberation Sans', 'Arial']
-
-    plt.rcParams['mathtext.fontset'] = 'cm'
-    plt.rcParams['xtick.direction'] = 'in'
-    plt.rcParams['ytick.direction'] = 'in'
-
-    plt.rc('font', size=14)          # controls default text sizes
-    plt.rc('axes', titlesize=16)     # fontsize of the axes title
-    plt.rc('axes', labelsize=14)    # fontsize of the x and y labels
-    plt.rc('xtick', labelsize=12)    # fontsize of the tick labels
-    plt.rc('ytick', labelsize=12)    # fontsize of the tick labels
-    plt.rc('legend', fontsize=12)    # legend fontsize
-    plt.rc('figure', titlesize=16)  # fontsize of the figure title
-
-    pd.set_option('future.no_silent_downcasting', True)
-    
-
-    c_darkorange_rgb = np.array([249, 97, 0])/255
-    c_orange_rgb = np.array([255, 165, 0])/255
-    c_blue_rgb = np.array([60,126,176])/255
-    c_white_rgb = np.array([255, 255, 255])/255
-    c_navy_rgb = np.array([16, 19, 123])/255
-    c_gray_rgb = np.array([128, 128, 128])/255
-    c_lightgray_rgb = np.array([200, 200, 200])/255
-
-    diverging_cmap = LinearSegmentedColormap.from_list('custom_cmap', [c_blue_rgb, c_white_rgb, c_darkorange_rgb])
-    
-    return diverging_cmap, c_darkorange_rgb, c_orange_rgb, c_blue_rgb, c_white_rgb, c_navy_rgb, c_gray_rgb, c_lightgray_rgb
 

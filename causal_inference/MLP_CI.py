@@ -17,7 +17,7 @@ class MLPCI(CondIndTest):
         return self._measure
 
     def __init__(self, dataset_length, pr_params=None, **kwargs):
-        self._measure = 'pr_ci'
+        self._measure = 'mlp_ci'
         self.two_sided = False
         self.residual_based = True
         self.eps = 0
