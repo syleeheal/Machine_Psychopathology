@@ -421,7 +421,7 @@ def model_selection(cfg):
             cfg.model_id,
             device_map='auto', 
             dtype=torch.bfloat16,   
-            # attn_implementation="flash_attention_2", 
+            attn_implementation="flash_attention_2", 
             quantization_config=quantization_config,
         )
         
@@ -431,7 +431,7 @@ def model_selection(cfg):
             cfg.model_id, 
             device_map='auto', 
             dtype=torch.bfloat16,
-            # attn_implementation="flash_attention_2", 
+            attn_implementation="flash_attention_2", 
         )
     
     model.eval()
