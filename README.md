@@ -53,7 +53,7 @@ Before running experiments, data must be generated and activations extracted.
 
 ## 🧠 S3AE
 
-This project uses **S3AE** to measure and intervene in LLM representational states. The trained S3AE weights are provided in this [HuggingFace Repo](https://huggingface.co/syleetolow/models). The S3AEs was trained using a proprietary synthetic dataset with psychopathology symptom labels. 
+This project uses **S3AE** to measure and intervene in LLM representational states. The trained S3AE weights are provided in this [HuggingFace Repo](https://huggingface.co/syleetolow/models). The S3AEs were trained using a proprietary synthetic dataset with psychopathology symptom labels. 
 
 The 1st to 12th dimensions of S3AE features, respectively, correspond to activations of the following thoughts:
 
@@ -98,7 +98,7 @@ These experiments evaluate the effect of intervening in specific units and analy
 
 ### 2. Causal Inference (Figure 2F)
 
-This code analyzes the causality involved in the unit activation dynamics using J-PCMCI+ algorithm and AIE estimation.
+This code analyzes the causality involved in the unit activation dynamics using the J-PCMCI+ algorithm and AIE estimation.
 
 | Experiment | Figure | Script |
 | :--- | :--- | :--- |
