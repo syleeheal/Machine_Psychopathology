@@ -107,7 +107,7 @@ This code analyzes the causality involved in the unit activation dynamics using 
 - **Usage**: Before running the code, set 'model_id' when initializing Config class.
 
 
-### 3. Social Simulations (Figure 3A)
+### 3. Behavioral Analysis Under Simulations (Figure 3A)
 
 These experiments simulate interactions between agents to observe behavioral changes under unit interventions.
 
