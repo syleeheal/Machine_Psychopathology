@@ -40,6 +40,15 @@ The repository is organized into the following directories:
 
 ---
 
+## 💬 Interactive Chat with Intervened LLM.
+
+Chat with the unit-intervened LLM using `chat_with_intervened_llm.ipynb`.
+You can interactively adjust the intervened unit and its intervention strength/layer.
+
+<img width="1754" height="1678" alt="image" src="https://github.com/user-attachments/assets/2c271dd1-65b2-4267-8fcc-a7c788f4143e" />
+
+---
+
 ## 📊 Synthetic Data Generation
 
 Before running experiments, data must be generated and activations extracted.
@@ -48,6 +57,7 @@ Before running experiments, data must be generated and activations extracted.
 | :--- | :--- | :--- |
 | **A4.2** | **Thought Data Generation**: Generates text data expressing specific labeled thoughts and extracts activations. | `data_generation/nb_gen_data_thought.ipynb` |
 | **A4.3** | **Severity Data Generation**: Generates text data expressing varying severity of thoughts. | `data_generation/nb_gen_data_intensity.ipynb` |
+![Uploading image.png…]()
 
 ---
 
