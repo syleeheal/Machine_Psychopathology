@@ -16,6 +16,7 @@ The repository is organized into the following directories:
 - **`simulation/`**: Simulation environments including counseling and game scenarios (Figure 3A).
 - **`analysis/`**: Scripts for generating figures and analyzing experimental results.
 - **`utils.py`**: Core configuration, data management, and model loading utilities.
+- **`supplement/`**: The supplementary information, including results about the 11 LLMs not included in the main manuscript.
 
 ---
 
