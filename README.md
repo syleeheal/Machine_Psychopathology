@@ -57,7 +57,6 @@ Before running experiments, data must be generated and activations extracted.
 | :--- | :--- | :--- |
 | **A4.2** | **Thought Data Generation**: Generates text data expressing specific labeled thoughts and extracts activations. | `data_generation/nb_gen_data_thought.ipynb` |
 | **A4.3** | **Severity Data Generation**: Generates text data expressing varying severity of thoughts. | `data_generation/nb_gen_data_intensity.ipynb` |
-![Uploading image.png…]()
 
 ---
 
